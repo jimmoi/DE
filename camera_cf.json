@@ -1,0 +1,11 @@
+{
+    "camara_1":{
+        "address":0,
+        "name":"vanila webcam"
+    },
+
+    "camara_2":{
+        "address":2,
+        "name":"nvidia webcam"
+    }
+}
