@@ -3,7 +3,7 @@ import numpy as np
 import cv2
 import json
 
-class camera():
+class camera(CAM):
     def __init__(self, cam_data:dict) -> None:
         self.address:str = cam_data["address"]
         self.name:str = cam_data.get("name", "Unnamed Camera")
