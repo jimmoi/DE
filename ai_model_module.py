@@ -161,7 +161,8 @@ class YOLOv8HumanDetector(AIModel):
     Concrete implementation of AIModel for YOLOv8 human detection.
     Uses ultralytics YOLO library.
     """
-    def __init__(self, model_name: str = 'yolov8n.pt', device: str = 'auto', optimize: dict = None, confidence_threshold: float = 0.5):
+    def __init__(self, model_name: str = 'yolov8n.pt', device: str = 'auto',
+                 optimize: dict = None, confidence_threshold: float = 0.5, iou_threshold: float = 0.7):
         """
         Args:
             model_name (str): Name of the YOLOv8 model (e.g., 'yolov8n.pt', 'yolov8s.pt').
@@ -170,12 +171,15 @@ class YOLOv8HumanDetector(AIModel):
             optimize (dict): Optimization settings.
                              E.g., {'half': True, 'tensorrt': False}
             confidence_threshold (float): Minimum confidence score for a detection to be kept.
+            iou_threshold (float): IoU threshold for Non-Maximum Suppression (NMS). Lower values
+                                   result in fewer overlapping boxes (more aggressive NMS).
         """
         # Ensure model directory exists
         os.makedirs(MODEL_DIR, exist_ok=True)
         model_path = os.path.join(MODEL_DIR, model_name)
         super().__init__(model_path, device, optimize)
         self.confidence_threshold = confidence_threshold
+        self.iou_threshold = iou_threshold # Store the IoU threshold
         
         if not _YOLO_AVAILABLE:
             raise ImportError("ultralytics library is not installed. Cannot initialize YOLOv8HumanDetector.")
@@ -215,7 +219,7 @@ class YOLOv8HumanDetector(AIModel):
             print(f"Error loading YOLOv8 model: {e}")
             raise
 
-    def _preprocess(self, image: np.ndarray) -> torch.Tensor:
+    def _preprocess(self, image: np.ndarray) -> np.ndarray: # Changed return type to np.ndarray
         """
         YOLOv8's `predict` method handles internal preprocessing,
         so this method can be a passthrough or minimal.
@@ -229,12 +233,11 @@ class YOLOv8HumanDetector(AIModel):
         """
         Runs inference using the YOLOv8 model.
         """
-        # The ultralytics YOLO.predict method is quite comprehensive.
-        # It takes care of preprocessing and can return results directly.
-        # We pass the original image (or list of images) and let it handle the rest.
+        # Pass the iou_threshold directly to the predict method
         results = self.model.predict(
             source=preprocessed_input,
             conf=self.confidence_threshold,
+            iou=self.iou_threshold, # NMS IoU threshold added here
             classes=[HUMAN_CLASS_ID_YOLO], # Filter for human class (0)
             verbose=False, # Suppress verbose output
             device=self.device # Ensure inference runs on the correct device
@@ -257,8 +260,11 @@ class YOLOv8HumanDetector(AIModel):
                     class_id = int(box.cls[0])
                     class_name = self.model.names[class_id] # Get class name from model
 
-                    # Filter by confidence and ensure it's a human
-                    if conf >= self.confidence_threshold and class_id == HUMAN_CLASS_ID_YOLO:
+                    # Note: Confidence and class filtering are already handled by model.predict
+                    # when `conf` and `classes` arguments are passed.
+                    # We can still add an explicit check here for clarity or if pre-filtering
+                    # logic changes in future versions of ultralytics.
+                    if class_id == HUMAN_CLASS_ID_YOLO: # We only process human detections at this point
                         detections.append({
                             'box': [x1, y1, x2, y2],
                             'score': conf,
@@ -267,7 +273,56 @@ class YOLOv8HumanDetector(AIModel):
                         })
         return detections
 
-# --- Example Usage (for testing the module) ---
+# --- First Example Usage (for testing the module) ---
+if __name__ == "__main__":
+    print("--- Testing AI Model Module with NMS Adjustment ---")
+
+    # Create a dummy image for testing
+    dummy_image = np.zeros((640, 480, 3), dtype=np.uint8) # Black image 640x480
+    cv2.putText(dummy_image, "Test Image", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+    # Simulate a human-like detection area (just for visual reference, model won't detect this as human)
+    cv2.rectangle(dummy_image, (100, 100), (200, 300), (255, 0, 0), 2)
+
+    # Test YOLOv8HumanDetector with default NMS
+    print("\n--- Testing YOLOv8HumanDetector (Default NMS: conf=0.25, iou=0.7) ---")
+    try:
+        yolo_detector_default_nms = YOLOv8HumanDetector(model_name='yolov8n.pt', device='cpu', 
+                                                       confidence_threshold=0.25, iou_threshold=0.7)
+        detections_default = yolo_detector_default_nms.predict(dummy_image)
+        print(f"Detections (default NMS): {detections_default}")
+
+        # Test YOLOv8HumanDetector with adjusted NMS (more aggressive suppression)
+        print("\n--- Testing YOLOv8HumanDetector (Aggressive NMS: conf=0.25, iou=0.4) ---")
+        yolo_detector_aggressive_nms = YOLOv8HumanDetector(model_name='yolov8n.pt', device='cpu', 
+                                                          confidence_threshold=0.25, iou_threshold=0.4) # Lower IoU
+        detections_aggressive = yolo_detector_aggressive_nms.predict(dummy_image)
+        print(f"Detections (aggressive NMS): {detections_aggressive}")
+
+        # Test YOLOv8HumanDetector with less aggressive NMS
+        print("\n--- Testing YOLOv8HumanDetector (Less Aggressive NMS: conf=0.25, iou=0.9) ---")
+        yolo_detector_less_aggressive_nms = YOLOv8HumanDetector(model_name='yolov8n.pt', device='cpu', 
+                                                               confidence_threshold=0.25, iou_threshold=0.9) # Higher IoU
+        detections_less_aggressive = yolo_detector_less_aggressive_nms.predict(dummy_image)
+        print(f"Detections (less aggressive NMS): {detections_less_aggressive}")
+
+        if torch.cuda.is_available():
+            print("\n--- Testing YOLOv8HumanDetector (CUDA + Adjusted NMS) ---")
+            yolo_detector_cuda_nms = YOLOv8HumanDetector(model_name='yolov8n.pt', device='cuda', 
+                                                        optimize={'half': True, 'tensorrt': True},
+                                                        confidence_threshold=0.25, iou_threshold=0.6)
+            detections_cuda_nms = yolo_detector_cuda_nms.predict(dummy_image)
+            print(f"Detections (CUDA + Adjusted NMS): {detections_cuda_nms}")
+        else:
+            print("\nCUDA not available. Skipping CUDA tests.")
+
+    except ImportError as ie:
+        print(f"\nSkipping YOLOv8 tests due to missing ultralytics library: {ie}")
+    except Exception as e:
+        print(f"\nAn error occurred during YOLOv8 testing: {e}")
+
+    print("\n--- Testing Finished ---")
+    
+# --- Second Example Usage (for testing the module) ---
 if __name__ == "__main__":
     print("--- Testing AI Model Module ---")
 
