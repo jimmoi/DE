@@ -137,7 +137,7 @@ class CCTVCamera(Camera):
     """
     def __init__(self, camera_id: str, rtsp_url: str):
         super().__init__(camera_id)
-        if not rtsp_url:
+        if not rtsp_url and rtsp_url != 0:
             raise ValueError("RTSP URL cannot be empty for CCTV camera.")
         self.rtsp_url = rtsp_url
         self._cap = None # OpenCV VideoCapture object
@@ -148,7 +148,7 @@ class CCTVCamera(Camera):
         """
         for attempt in range(RECONNECT_ATTEMPTS):
             print(f"Camera {self.camera_id}: Attempting to connect to RTSP stream ({attempt + 1}/{RECONNECT_ATTEMPTS})...")
-            cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG) # Use FFMPEG backend for RTSP
+            cap =  cv2.VideoCapture(int(self.rtsp_url)) if self.rtsp_url.isnumeric() else cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)# Use FFMPEG backend for RTSP
             if cap.isOpened():
                 self._cap = cap
                 print(f"Camera {self.camera_id}: Successfully connected to RTSP stream.")
