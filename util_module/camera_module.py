@@ -238,10 +238,19 @@ class VideoFileCamera(Camera):
                     print(f"Info: Video file {self.camera_id} has finished. Stopping acquisition.")
                     self._is_running = False
                     break
-        
+                
+
         # Ensure camera is released when stopping
         self._release_camera(cap)
         print(f"Camera {self.camera_id} acquisition thread terminated.")
+        
+    def get_fps(self):
+        """Returns the frames per second of the video file."""
+        if self.fps is not None:
+            return self.fps
+        else:
+            print(f"Warning: FPS not available for camera {self.camera_id}.")
+            return None
 
 # --- Example Usage (for testing the module) ---
 if __name__ == "__main__":

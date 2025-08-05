@@ -232,6 +232,8 @@ class YOLOv8HumanDetector(AIModel):
             iou_threshold (float): IoU threshold for Non-Maximum Suppression (NMS). Lower values
                                    result in fewer overlapping boxes (more aggressive NMS).
         """
+        super().__init__(model_path=model_name, device=device, optimize=optimize)
+        
         # Ensure model directory exists
         os.makedirs(MODEL_DIR, exist_ok=True)
         model_path = os.path.join(MODEL_DIR, model_name)
@@ -242,7 +244,7 @@ class YOLOv8HumanDetector(AIModel):
         self.tracker_config_path = tracker_config_path
         self.verbose = verbose # Verbose output for debugging
         
-        if self.tracker_config_path:
+        if self.tracker_config_path is not None:
             self.is_using_tracker = True
         
         if not _YOLO_AVAILABLE:
@@ -358,6 +360,7 @@ class YOLOv8HumanDetector(AIModel):
             verbose=self.verbose, # Suppress verbose output
             device=self.device # Ensure inference runs on the correct device
         )
+            
         return results
 
     def _postprocess(self, model_output, original_shape: tuple) -> list:
@@ -369,48 +372,47 @@ class YOLOv8HumanDetector(AIModel):
         for result in model_output:
             # Each result object contains boxes, masks, keypoints, etc.
             # We are interested in result.boxes for detection.
-            if result.boxes and result.boxes.id is not None :
-                if self.is_using_tracker:
-                    for i, track_id in enumerate(result.boxes.id):
-                        box = result.boxes[i]
-                        x1, y1, x2, y2 = box.xyxyn[0].tolist()
-                        conf = float(box.conf[0])
-                        class_id = int(box.cls[0])
-                        class_name = self.model.names[class_id]
+            if result.boxes:
+                    if self.is_using_tracker and result.boxes.id is not None :
+                        for i, track_id in enumerate(result.boxes.id):
+                            box = result.boxes[i]
+                            x1, y1, x2, y2 = box.xyxyn[0].tolist()
+                            conf = float(box.conf[0])
+                            class_id = int(box.cls[0])
+                            class_name = self.model.names[class_id]
 
-                        detections.append({
-                            'box': [x1, y1, x2, y2],
-                            'score': float(conf),
-                            'class_id': class_id,
-                            'class_name': class_name,
-                            'track_id': int(track_id)
-                        })
-                else:   
-                    for box in result.boxes:
-                        
-                        x1, y1, x2, y2 = box.xyxyn[0].tolist()
-                        conf = float(box.conf[0])
-                        class_id = int(box.cls[0])
-                        class_name = self.model.names[class_id] # Get class name from model
-
-                        # Note: Confidence and class filtering are already handled by model.predict
-                        # when `conf` and `classes` arguments are passed.
-                        # We can still add an explicit check here for clarity or if pre-filtering
-                        # logic changes in future versions of ultralytics.
-                        if class_id == HUMAN_CLASS_ID_YOLO: # We only process human detections at this point
                             detections.append({
                                 'box': [x1, y1, x2, y2],
-                                'score': conf,
+                                'score': float(conf),
                                 'class_id': class_id,
-                                'class_name': class_name
-                            })   
+                                'class_name': class_name,
+                                'track_id': int(track_id)
+                            })
+                    else: 
+                        for box in result.boxes:
+                            x1, y1, x2, y2 = box.xyxyn[0].tolist()
+                            conf = float(box.conf[0])
+                            class_id = int(box.cls[0])
+                            class_name = self.model.names[class_id] # Get class name from model
+
+                            # Note: Confidence and class filtering are already handled by model.predict
+                            # when `conf` and `classes` arguments are passed.
+                            # We can still add an explicit check here for clarity or if pre-filtering
+                            # logic changes in future versions of ultralytics.
+                            if class_id == HUMAN_CLASS_ID_YOLO: # We only process human detections at this point
+                                detections.append({
+                                    'box': [x1, y1, x2, y2],
+                                    'score': conf,
+                                    'class_id': class_id,
+                                    'class_name': class_name
+                                })   
         return detections
 
 # --- First Example Usage (for testing the module) ---
 if __name__ == "__main__":
     model = YOLOv8HumanDetector(
         # tracker_config_path=STRONGSORT_DEFAULT_CFG, 
-        tracker_config_path = BYTETRACK_DEFAULT_CFG,
+        # tracker_config_path = BYTETRACK_DEFAULT_CFG,
     )
 
     # Load an example image (replace with your own image path)
@@ -427,13 +429,13 @@ if __name__ == "__main__":
         
         # Update with StrongSORT
         result = model.predict(frame.copy())
-        print(result)
+        # print(result)
         
         # --- Visualization ---
         frame_strongsort = frame.copy()
         for track in result:
             x1, y1, x2, y2 = track['box']
-            track_id = track['track_id']
+            # track_id = track['track_id']
             # Draw bounding box and track ID
             x1 = x1 * width
             y1 = y1 * height
@@ -441,7 +443,7 @@ if __name__ == "__main__":
             y2 = y2 * height
             x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
             cv2.rectangle(frame_strongsort, (x1, y1), (x2, y2), (0, 0, 255), 2)
-            cv2.putText(frame_strongsort, f"ID: {track_id}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+            # cv2.putText(frame_strongsort, f"ID: {track_id}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
         cv2.imshow("StrongSORT (Custom Config)", frame_strongsort)
         
         if cv2.waitKey(1) & 0xFF == ord('q'):
