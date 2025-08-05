@@ -130,8 +130,7 @@ class AIModel(ABC):
             preprocessed_img = self._preprocess(img)
             
             # Move preprocessed image to the correct device
-            if isinstance(preprocessed_img, torch.Tensor):  # ✅
-                preprocessed_img = preprocessed_img.to(self.device)
+            preprocessed_img = preprocessed_img.to(self.device)
 
             with torch.no_grad(): # Disable gradient calculation for inference
                 if self.optimize.get('half', False) and self.device == 'cuda':
@@ -236,6 +235,7 @@ class YOLOv8HumanDetector(AIModel):
         # Ensure model directory exists
         os.makedirs(MODEL_DIR, exist_ok=True)
         model_path = os.path.join(MODEL_DIR, model_name)
+        super().__init__(model_path, device, optimize)
         self.confidence_threshold = confidence_threshold
         self.iou_threshold = iou_threshold # Store the IoU threshold
         self.is_using_tracker = False
@@ -332,21 +332,6 @@ class YOLOv8HumanDetector(AIModel):
         # It handles resizing, normalization, and channel ordering internally.
         # So, we just return the original image.
         return image
-
-    # def _inference(self, preprocessed_input):
-    #     """
-    #     Runs inference using the YOLOv8 model.
-    #     """
-    #     # Pass the iou_threshold directly to the predict method
-    #     results = self.model.predict(
-    #         source=preprocessed_input,
-    #         conf=self.confidence_threshold,
-    #         iou=self.iou_threshold, # NMS IoU threshold added here
-    #         classes=[HUMAN_CLASS_ID_YOLO], # Filter for human class (0)
-    #         verbose=False, # Suppress verbose output
-    #         device=self.device # Ensure inference runs on the correct device
-    #     )
-    #     return results
 
     def _inference(self, preprocessed_input):
         """
