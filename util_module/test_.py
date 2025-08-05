@@ -46,7 +46,7 @@ def log_detections_per_frame_wide(detections, log_path="detections_log.csv", fra
 def main():
     video_path = r"C:\Users\kunka\Documents\GitHub\DE\test_vidio.mp4"
     camera = VideoFileCamera("VideoTest", video_path)
-    camera.start()
+    
 
     model = YOLOv8HumanDetector(
         model_name='yolov8n.pt',
@@ -55,11 +55,11 @@ def main():
         iou_threshold=0.7,
         use_tracking=True  # ✅ เปิด tracking
     )
-
+    camera.start()
     frame_counter = 0
 
     try:
-        while True:
+        while camera.is_running:
             frame = camera.get_frame()
             if frame is not None:
                 detections = model.predict(frame)
