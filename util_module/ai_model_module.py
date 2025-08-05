@@ -244,7 +244,7 @@ class YOLOv8HumanDetector(AIModel):
         self.tracker_config_path = tracker_config_path
         self.verbose = verbose # Verbose output for debugging
         
-        if self.tracker_config_path:
+        if self.tracker_config_path is not None:
             self.is_using_tracker = True
         
         if not _YOLO_AVAILABLE:
@@ -360,6 +360,7 @@ class YOLOv8HumanDetector(AIModel):
             verbose=self.verbose, # Suppress verbose output
             device=self.device # Ensure inference runs on the correct device
         )
+            
         return results
 
     def _postprocess(self, model_output, original_shape: tuple) -> list:
@@ -371,41 +372,40 @@ class YOLOv8HumanDetector(AIModel):
         for result in model_output:
             # Each result object contains boxes, masks, keypoints, etc.
             # We are interested in result.boxes for detection.
-            if result.boxes and result.boxes.id is not None :
-                if self.is_using_tracker:
-                    for i, track_id in enumerate(result.boxes.id):
-                        box = result.boxes[i]
-                        x1, y1, x2, y2 = box.xyxyn[0].tolist()
-                        conf = float(box.conf[0])
-                        class_id = int(box.cls[0])
-                        class_name = self.model.names[class_id]
+            if result.boxes:
+                    if self.is_using_tracker and result.boxes.id is not None :
+                        for i, track_id in enumerate(result.boxes.id):
+                            box = result.boxes[i]
+                            x1, y1, x2, y2 = box.xyxyn[0].tolist()
+                            conf = float(box.conf[0])
+                            class_id = int(box.cls[0])
+                            class_name = self.model.names[class_id]
 
-                        detections.append({
-                            'box': [x1, y1, x2, y2],
-                            'score': float(conf),
-                            'class_id': class_id,
-                            'class_name': class_name,
-                            'track_id': int(track_id)
-                        })
-                else:   
-                    for box in result.boxes:
-                        
-                        x1, y1, x2, y2 = box.xyxyn[0].tolist()
-                        conf = float(box.conf[0])
-                        class_id = int(box.cls[0])
-                        class_name = self.model.names[class_id] # Get class name from model
-
-                        # Note: Confidence and class filtering are already handled by model.predict
-                        # when `conf` and `classes` arguments are passed.
-                        # We can still add an explicit check here for clarity or if pre-filtering
-                        # logic changes in future versions of ultralytics.
-                        if class_id == HUMAN_CLASS_ID_YOLO: # We only process human detections at this point
                             detections.append({
                                 'box': [x1, y1, x2, y2],
-                                'score': conf,
+                                'score': float(conf),
                                 'class_id': class_id,
-                                'class_name': class_name
-                            })   
+                                'class_name': class_name,
+                                'track_id': int(track_id)
+                            })
+                    else: 
+                        for box in result.boxes:
+                            x1, y1, x2, y2 = box.xyxyn[0].tolist()
+                            conf = float(box.conf[0])
+                            class_id = int(box.cls[0])
+                            class_name = self.model.names[class_id] # Get class name from model
+
+                            # Note: Confidence and class filtering are already handled by model.predict
+                            # when `conf` and `classes` arguments are passed.
+                            # We can still add an explicit check here for clarity or if pre-filtering
+                            # logic changes in future versions of ultralytics.
+                            if class_id == HUMAN_CLASS_ID_YOLO: # We only process human detections at this point
+                                detections.append({
+                                    'box': [x1, y1, x2, y2],
+                                    'score': conf,
+                                    'class_id': class_id,
+                                    'class_name': class_name
+                                })   
         return detections
 
 # --- First Example Usage (for testing the module) ---
@@ -429,7 +429,7 @@ if __name__ == "__main__":
         
         # Update with StrongSORT
         result = model.predict(frame.copy())
-        print(result)
+        # print(result)
         
         # --- Visualization ---
         frame_strongsort = frame.copy()
