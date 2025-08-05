@@ -179,6 +179,7 @@ class VideoFileCamera(Camera):
             raise ValueError("Video file path cannot be empty for video file camera.")
         self.video_path = video_path
         self._cap = None # OpenCV VideoCapture object
+        self.fps = None # File pointer for the video file
 
     def _open_camera(self):
         """Opens the video file."""
@@ -188,6 +189,7 @@ class VideoFileCamera(Camera):
             print(f"Error: Could not open video file {self.camera_id}: {self.video_path}")
             return None
         self._cap = cap
+        self.fps = cap.get(cv2.CAP_PROP_FPS)  # Get frames per second of the video
         print(f"Camera {self.camera_id}: Video file opened.")
         return cap
 

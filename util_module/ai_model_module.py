@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 import torch
 import os
 import time
+from typing import Union, List
 
 # Try to import ultralytics. If not available, provide a mock for demonstration.
 try:
@@ -255,7 +256,7 @@ class YOLOv8HumanDetector(AIModel):
             # We are interested in result.boxes for detection.
             if result.boxes is not None:
                 for box in result.boxes:
-                    x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+                    x1, y1, x2, y2 = map(int, box.xyxyn[0].tolist())
                     conf = float(box.conf[0])
                     class_id = int(box.cls[0])
                     class_name = self.model.names[class_id] # Get class name from model
