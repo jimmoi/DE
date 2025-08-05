@@ -68,17 +68,17 @@ def log_detections_per_frame_wide(detections, log_path="detections_log.csv", fra
 
 # --- main ---
 def main():
-    video_path = r"C:\Users\kunka\Documents\GitHub\DE\test_vidio.mp4"
+    video_path = r"C:\Hemoglobin\project\DE\Vid_test\vdo_test_psdetec.mp4"
     camera = VideoFileCamera("VideoTest", video_path)
-    camera.start()
-
     # โหลด YOLOv8 + StrongSORT
     model = YOLO('yolov8n.pt')  # สามารถใช้ yolov8s.pt หรือ yolov8m.pt ได้
 
+
+    camera.start()
     frame_counter = 0
 
     try:
-        while True:
+        while camera.is_running:
             frame = camera.get_frame()
             if frame is not None:
                 # ตรวจจับและติดตามคน (class_id 0)
@@ -98,7 +98,7 @@ def main():
                     draw_detections(frame, detections)
 
                     # log เป็น wide row
-                    log_detections_per_frame_wide(detections, frame_id=frame_counter)
+                    # log_detections_per_frame_wide(detections, frame_id=frame_counter)
 
                     cv2.imshow("YOLOv8 Tracking", frame)
                     frame_counter += 1
