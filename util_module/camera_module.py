@@ -219,6 +219,7 @@ class VideoFileCamera(Camera):
         while self._is_running:
             
             if self._frame_buffer.full():
+                time.sleep(0.1)
                 continue  # Skip if buffer is full to avoid blocking
             else:
                 ret, frame = self._read_frame_internal(cap)
