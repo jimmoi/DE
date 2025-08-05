@@ -232,6 +232,8 @@ class YOLOv8HumanDetector(AIModel):
             iou_threshold (float): IoU threshold for Non-Maximum Suppression (NMS). Lower values
                                    result in fewer overlapping boxes (more aggressive NMS).
         """
+        super().__init__(model_path=model_name, device=device, optimize=optimize)
+        
         # Ensure model directory exists
         os.makedirs(MODEL_DIR, exist_ok=True)
         model_path = os.path.join(MODEL_DIR, model_name)
@@ -410,7 +412,7 @@ class YOLOv8HumanDetector(AIModel):
 if __name__ == "__main__":
     model = YOLOv8HumanDetector(
         # tracker_config_path=STRONGSORT_DEFAULT_CFG, 
-        tracker_config_path = BYTETRACK_DEFAULT_CFG,
+        # tracker_config_path = BYTETRACK_DEFAULT_CFG,
     )
 
     # Load an example image (replace with your own image path)
@@ -433,7 +435,7 @@ if __name__ == "__main__":
         frame_strongsort = frame.copy()
         for track in result:
             x1, y1, x2, y2 = track['box']
-            track_id = track['track_id']
+            # track_id = track['track_id']
             # Draw bounding box and track ID
             x1 = x1 * width
             y1 = y1 * height
@@ -441,7 +443,7 @@ if __name__ == "__main__":
             y2 = y2 * height
             x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
             cv2.rectangle(frame_strongsort, (x1, y1), (x2, y2), (0, 0, 255), 2)
-            cv2.putText(frame_strongsort, f"ID: {track_id}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+            # cv2.putText(frame_strongsort, f"ID: {track_id}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
         cv2.imshow("StrongSORT (Custom Config)", frame_strongsort)
         
         if cv2.waitKey(1) & 0xFF == ord('q'):
