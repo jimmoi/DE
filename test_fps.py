@@ -29,7 +29,7 @@ def get_video_fps(video_path):
 # ตัวอย่างการใช้งาน:
 if __name__ == "__main__":
     # ใช้ video_path จากโค้ดที่คุณมีอยู่
-    video_path = r"C:\Users\kunka\Documents\GitHub\DE\Vid_test\istockphoto-1990843340-640_adpp_is.mp4"
+    video_path = r"C:\Users\kunka\Documents\GitHub\DE\Vid_test\vdo_test_psdetec.mp4"
     
     fps_value = get_video_fps(video_path)
     

@@ -1,6 +1,5 @@
 from util_module.camera_module import VideoFileCamera
 from util_module.ai_model_module import YOLOv8HumanDetector, STRONGSORT_DEFAULT_CFG
-from util_module.draw_utils import draw_detections
 from collect_log import log_detections_per_frame_wide
 
 
@@ -10,7 +9,7 @@ import time
 
 def main():
     # video_path = r"C:\Users\kunka\Documents\GitHub\DE\test_vidio.mp4"
-    video_path = r"C:\Hemoglobin\project\DE\Vid_test\vdo_test_psdetec.mp4"
+    video_path = r"C:\Users\kunka\Documents\GitHub\DE\Vid_test\vdo_test_psdetec.mp4"
     camera = VideoFileCamera("VideoTest", video_path)
     
     model = YOLOv8HumanDetector(
@@ -49,7 +48,7 @@ def main():
                     x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
                     cv2.putText(frame, f"ID: {track_id}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
-                # log_detections_per_frame_wide(detections, frame_id=frame_counter, fps=fps)
+                log_detections_per_frame_wide(detections, frame_id=frame_counter, fps=fps)
                 cv2.imshow("Tracking", frame)
                 frame_counter += 1
             else:
