@@ -1,14 +1,13 @@
-from util_module.camera_module import VideoFileCamera
-from util_module.ai_model_module import YOLOv8HumanDetector
-from util_module.draw_utils import draw_detections
-from collect_log import log_detections_per_frame_wide
-
+from camera_module import VideoFileCamera
+from ai_model_module import YOLOv8HumanDetector
+from draw_utils import draw_detections
+from logger import log_detections_per_frame_wide
 
 import cv2
 import time
 
 def main():
-    video_path = r"C:\Users\kunka\Documents\GitHub\DE\Vid_test\istockphoto-1990843340-640_adpp_is.mp4"
+    video_path = r"C:\Users\kunka\Documents\GitHub\DE\test_vidio.mp4"
     camera = VideoFileCamera("VideoTest", video_path)
 
     # ✅ อ่าน FPS จริงของวิดีโอ

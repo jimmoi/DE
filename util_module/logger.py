@@ -2,7 +2,7 @@ import os
 import csv
 from datetime import datetime
 
-def log_detections_per_frame_wide(detections, log_path="detections_log.csv", frame_id=0, fps=30.0):
+def log_detections_per_frame_wide(detections, log_path="detections_log.csv", frame_id=0, fps=0.0):
     timestamp = datetime.now().isoformat()
     video_time_sec = frame_id / fps
 

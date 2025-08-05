@@ -128,7 +128,8 @@ class AIModel(ABC):
             preprocessed_img = self._preprocess(img)
             
             # Move preprocessed image to the correct device
-            preprocessed_img = preprocessed_img.to(self.device)
+            if isinstance(preprocessed_img, torch.Tensor):  # ✅
+                preprocessed_img = preprocessed_img.to(self.device)
 
             with torch.no_grad(): # Disable gradient calculation for inference
                 if self.optimize.get('half', False) and self.device == 'cuda':
@@ -163,7 +164,8 @@ class YOLOv8HumanDetector(AIModel):
     Uses ultralytics YOLO library.
     """
     def __init__(self, model_name: str = 'yolov8n.pt', device: str = 'auto',
-                 optimize: dict = None, confidence_threshold: float = 0.5, iou_threshold: float = 0.7):
+                 optimize: dict = None, confidence_threshold: float = 0.5,
+                 iou_threshold: float = 0.7, use_tracking: bool = False):  # ✅ เพิ่ม use_tracking
         """
         Args:
             model_name (str): Name of the YOLOv8 model (e.g., 'yolov8n.pt', 'yolov8s.pt').
@@ -178,9 +180,11 @@ class YOLOv8HumanDetector(AIModel):
         # Ensure model directory exists
         os.makedirs(MODEL_DIR, exist_ok=True)
         model_path = os.path.join(MODEL_DIR, model_name)
-        super().__init__(model_path, device, optimize)
         self.confidence_threshold = confidence_threshold
-        self.iou_threshold = iou_threshold # Store the IoU threshold
+        self.iou_threshold = iou_threshold
+        self.use_tracking = use_tracking  # ✅ เก็บค่า use_tracking
+        super().__init__(model_path, device, optimize)
+
         
         if not _YOLO_AVAILABLE:
             raise ImportError("ultralytics library is not installed. Cannot initialize YOLOv8HumanDetector.")
@@ -230,19 +234,41 @@ class YOLOv8HumanDetector(AIModel):
         # So, we just return the original image.
         return image
 
+    # def _inference(self, preprocessed_input):
+    #     """
+    #     Runs inference using the YOLOv8 model.
+    #     """
+    #     # Pass the iou_threshold directly to the predict method
+    #     results = self.model.predict(
+    #         source=preprocessed_input,
+    #         conf=self.confidence_threshold,
+    #         iou=self.iou_threshold, # NMS IoU threshold added here
+    #         classes=[HUMAN_CLASS_ID_YOLO], # Filter for human class (0)
+    #         verbose=False, # Suppress verbose output
+    #         device=self.device # Ensure inference runs on the correct device
+    #     )
+    #     return results
+
     def _inference(self, preprocessed_input):
-        """
-        Runs inference using the YOLOv8 model.
-        """
-        # Pass the iou_threshold directly to the predict method
-        results = self.model.predict(
-            source=preprocessed_input,
-            conf=self.confidence_threshold,
-            iou=self.iou_threshold, # NMS IoU threshold added here
-            classes=[HUMAN_CLASS_ID_YOLO], # Filter for human class (0)
-            verbose=False, # Suppress verbose output
-            device=self.device # Ensure inference runs on the correct device
-        )
+        # ✅ แก้ไขเพื่อรองรับการ tracking
+        if self.use_tracking:
+            results = self.model.track(  # ✅ เรียกใช้ model.track()
+                source=preprocessed_input,
+                persist=True,  # ✅ เพิ่ม persist=True เพื่อคงสถานะการติดตาม
+                conf=self.confidence_threshold,
+                iou=self.iou_threshold,
+                classes=[HUMAN_CLASS_ID_YOLO],
+                verbose=False
+            )
+        else:
+            results = self.model.predict(
+                source=preprocessed_input,
+                conf=self.confidence_threshold,
+                iou=self.iou_threshold,
+                classes=[HUMAN_CLASS_ID_YOLO],
+                verbose=False,
+                device=self.device
+            )
         return results
 
     def _postprocess(self, model_output, original_shape: tuple) -> list:
@@ -260,6 +286,7 @@ class YOLOv8HumanDetector(AIModel):
                     conf = float(box.conf[0])
                     class_id = int(box.cls[0])
                     class_name = self.model.names[class_id] # Get class name from model
+                    track_id = int(box.id[0]) if box.id is not None else -1  # ✅ เพิ่มบรรทัดนี้
 
                     # Note: Confidence and class filtering are already handled by model.predict
                     # when `conf` and `classes` arguments are passed.
@@ -270,7 +297,8 @@ class YOLOv8HumanDetector(AIModel):
                             'box': [x1, y1, x2, y2],
                             'score': conf,
                             'class_id': class_id,
-                            'class_name': class_name
+                            'class_name': class_name,
+                            'person_id': track_id  # ✅ เพิ่ม person_id ใน dictionary
                         })
         return detections
 

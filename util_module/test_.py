@@ -1,5 +1,5 @@
 from camera_module import VideoFileCamera
-from ai_model_module2 import YOLOv8HumanDetector
+from ai_model_module import YOLOv8HumanDetector
 import cv2
 import time
 import csv
@@ -14,16 +14,19 @@ def draw_detections(frame, detections):
         cv2.putText(frame, label, (x1, y1 - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-def log_detections_per_frame_wide(detections, log_path="detections_log.csv", frame_id=0):
+def log_detections_per_frame_wide(detections, log_path="detections_log.csv", frame_id=0, fps=30.0):
     from datetime import datetime
     import os
     import csv
 
     timestamp = datetime.now().isoformat()
+    video_time_sec = frame_id / fps  # ✅ เวลาในวิดีโอ (เป็นวินาที)
+
     row_data = {
         "frame_id": frame_id,
-        "timestamp": timestamp
-    }
+        "timestamp": timestamp,
+        "video_time_sec": round(video_time_sec, 3)  # ✅ บันทึกเวลาในวิดีโอ     
+         }
 
     for idx, det in enumerate(detections, start=1):
         x1, y1, x2, y2 = det["box"]
@@ -46,6 +49,12 @@ def log_detections_per_frame_wide(detections, log_path="detections_log.csv", fra
 def main():
     video_path = r"C:\Users\kunka\Documents\GitHub\DE\test_vidio.mp4"
     camera = VideoFileCamera("VideoTest", video_path)
+
+    # ✅ อ่าน FPS จริงของวิดีโอ
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
+    print(f"Video FPS: {fps:.2f}")
     
 
     model = YOLOv8HumanDetector(
@@ -64,7 +73,8 @@ def main():
             if frame is not None:
                 detections = model.predict(frame)
                 draw_detections(frame, detections)
-                log_detections_per_frame_wide(detections, frame_id=frame_counter)
+                 # ✅ ส่งค่า fps เข้าไปด้วย
+                log_detections_per_frame_wide(detections, frame_id=frame_counter, fps=fps)
 
                 cv2.imshow("Tracking", frame)
                 frame_counter += 1
