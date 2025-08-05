@@ -167,18 +167,17 @@ class CCTVCamera(Camera):
             cap.release()
             print(f"Camera {self.camera_id}: RTSP stream released.")
 
-
+            
 class VideoFileCamera(Camera):
     """
     Handles local video files as camera sources.
-    Loops the video automatically when it ends.
+    Reads the file once and then stops.
     """
-    def __init__(self, camera_id: str, video_path: str, loop: bool = True):
+    def __init__(self, camera_id: str, video_path: str):
         super().__init__(camera_id)
         if not video_path:
             raise ValueError("Video file path cannot be empty for video file camera.")
         self.video_path = video_path
-        self.loop = loop
         self._cap = None # OpenCV VideoCapture object
 
     def _open_camera(self):
@@ -186,22 +185,18 @@ class VideoFileCamera(Camera):
         print(f"Camera {self.camera_id}: Opening video file: {self.video_path}...")
         cap = cv2.VideoCapture(self.video_path)
         if not cap.isOpened():
-            print(f"Error: Could not open video file {self.video_id}: {self.video_path}")
+            print(f"Error: Could not open video file {self.camera_id}: {self.video_path}")
             return None
         self._cap = cap
         print(f"Camera {self.camera_id}: Video file opened.")
         return cap
 
     def _read_frame_internal(self, cap):
-        """Reads a frame from the video file. Loops if configured."""
-        ret, frame = cap.read()
-        if not ret and self.loop:
-            # If video ends and loop is true, reset to beginning
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            ret, frame = cap.read() # Read the first frame after reset
-            if not ret:
-                print(f"Warning: Could not read first frame after looping for {self.camera_id}.")
-        return ret, frame
+        """
+        Reads a frame from the video file.
+        This simplified version doesn't handle looping.
+        """
+        return cap.read()
 
     def _release_camera(self, cap):
         """Releases the video file capture object."""
@@ -209,94 +204,53 @@ class VideoFileCamera(Camera):
             cap.release()
             print(f"Camera {self.camera_id}: Video file released.")
 
+    def _run_acquisition(self):
+        """
+        Overrides the base class method. This version stops gracefully
+        when the end of the video file is reached, without attempting to reconnect.
+        """
+        cap = self._open_camera()
+        if not cap or not cap.isOpened():
+            print(f"Error: Could not open video file {self.camera_id} initially. Stopping acquisition.")
+            self._is_running = False
+            return
+        
+        print(f"Camera {self.camera_id} successfully opened for acquisition.")
+        while self._is_running:
+            
+            if self._frame_buffer.full():
+                continue  # Skip if buffer is full to avoid blocking
+            else:
+                ret, frame = self._read_frame_internal(cap)
+                
+                if ret:
+                    # Put frame into buffer.
+                    self._frame_buffer.put_nowait(frame)
+
+                    # Also update latest frame for direct access
+                    with self._frame_lock:
+                        self._latest_frame = frame
+                else:
+                    # The video has ended. Stop the thread gracefully.
+                    print(f"Info: Video file {self.camera_id} has finished. Stopping acquisition.")
+                    self._is_running = False
+                    break
+        
+        # Ensure camera is released when stopping
+        self._release_camera(cap)
+        print(f"Camera {self.camera_id} acquisition thread terminated.")
+
 # --- Example Usage (for testing the module) ---
 if __name__ == "__main__":
-    print("--- Testing Camera Module ---")
-
-    # Example 1: CCTV Camera (replace with a real RTSP URL if you have one)
-    # For testing, you might use a dummy RTSP server or a public stream
-    # A common test stream: "rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4"
-    # Or your local CCTV URL: "rtsp://user:password@ip_address:port/stream"
-    cctv_url = "rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4" # Replace with your actual CCTV URL
-    if cctv_url == "your_cctv_url_here":
-        print("\nWARNING: Please replace 'your_cctv_url_here' with an actual RTSP URL to test CCTVCamera.")
-        print("Skipping CCTVCamera test for now.")
-        cctv_cam = None
-    else:
-        cctv_cam = CCTVCamera(camera_id="DoorCam1", rtsp_url=cctv_url)
-        cctv_cam.start()
-
-    # Example 2: Video File Camera (create a dummy video file or use an existing one)
-    # You might need to have a 'test_video.mp4' file in the same directory
-    # For a quick test, you can download a sample video or create a small one.
-    test_video_path = "test_video.mp4"
-    try:
-        # Attempt to create a dummy video if it doesn't exist for testing
-        cap_dummy = cv2.VideoCapture(0) # Try to open default camera
-        if cap_dummy.isOpened():
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(test_video_path, fourcc, 20.0, (640, 480))
-            print(f"Creating a dummy video file '{test_video_path}' for testing...")
-            for _ in range(50): # Capture 50 frames (approx 2.5 seconds)
-                ret, frame = cap_dummy.read()
-                if ret:
-                    out.write(cv2.resize(frame, (640, 480)))
-                else:
-                    print("Could not read frame from default camera to create dummy video.")
-                    break
-            out.release()
-            cap_dummy.release()
-            print(f"Dummy video '{test_video_path}' created.")
+    video_path = r"C:\Hemoglobin\project\DE\Vid_test\vdo_test_psdetec.mp4"  # Replace with your video file path
+    camera = VideoFileCamera(camera_id="test_video", video_path=video_path)
+    camera.start()
+    while camera.is_running:
+        frame = camera.get_frame()
+        if frame is not None:
+            cv2.imshow("Video Frame", frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
         else:
-            print(f"Could not open default camera to create dummy video. Please ensure '{test_video_path}' exists.")
-            test_video_path = None # Mark as not available for testing
-    except Exception as e:
-        print(f"Error creating dummy video: {e}")
-        test_video_path = None
-
-
-    video_cam = None
-    if test_video_path and cv2.VideoCapture(test_video_path).isOpened():
-        video_cam = VideoFileCamera(camera_id="EventAreaCam1", video_path=test_video_path, loop=True)
-        video_cam.start()
-    else:
-        print("Skipping VideoFileCamera test as no suitable video file found/created.")
-
-
-    # Demonstrate getting frames
-    frames_received_cctv = 0
-    frames_received_video = 0
-    print("\n--- Getting frames for 10 seconds ---")
-    start_time = time.time()
-    while time.time() - start_time < 10:
-        if cctv_cam and cctv_cam.is_running:
-            frame_cctv = cctv_cam.get_frame()
-            if frame_cctv is not None:
-                # cv2.imshow(f"CCTV {cctv_cam.camera_id}", frame_cctv)
-                frames_received_cctv += 1
-        
-        if video_cam and video_cam.is_running:
-            frame_video = video_cam.get_frame()
-            if frame_video is not None:
-                # cv2.imshow(f"Video {video_cam.camera_id}", frame_video)
-                frames_received_video += 1
-        
-        # Add a small delay to prevent busy-waiting and allow other threads to run
-        time.sleep(0.01) # Sleep for 10ms
-
-        # Check for 'q' key to quit imshow windows
-        # if cv2.waitKey(1) & 0xFF == ord('q'):
-        #     break
-
-    print(f"\nTotal frames received from CCTV Cam ({cctv_cam.camera_id if cctv_cam else 'N/A'}): {frames_received_cctv}")
-    print(f"Total frames received from Video Cam ({video_cam.camera_id if video_cam else 'N/A'}): {frames_received_video}")
-
-    # Cleanup
-    print("\n--- Stopping Cameras ---")
-    if cctv_cam:
-        cctv_cam.stop()
-    if video_cam:
-        video_cam.stop()
-
-    # cv2.destroyAllWindows()
-    print("--- Testing Finished ---")
+            continue
+    print("Stopping camera...")
