@@ -242,7 +242,7 @@ class VideoFileCamera(Camera):
 
 # --- Example Usage (for testing the module) ---
 if __name__ == "__main__":
-    video_path = r"C:\Hemoglobin\project\DE\Vid_test\vdo_test_psdetec.mp4"  # Replace with your video file path
+    video_path = r"C:\Users\kunka\Documents\GitHub\DE\test_vidio.mp4"  # Replace with your video file path
     camera = VideoFileCamera(camera_id="test_video", video_path=video_path)
     camera.start()
     while camera.is_running:

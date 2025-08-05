@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 import torch
 import os
 import time
+from typing import Union
 
 # Try to import ultralytics. If not available, provide a mock for demonstration.
 try:
