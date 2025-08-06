@@ -282,12 +282,9 @@ if __name__ == "__main__":
     while camera.is_running:
         frame = camera.get_frame()
         if frame is not None:
-            start_time = time.perf_counter()
             cv2.imshow("Video Frame", frame)
             if cv2.waitKey(5) & 0xFF == ord('q'):
                 break
-            end_time = time.perf_counter()
-            print(f"Frame displayed in {end_time - start_time:.3f} seconds.")
         else:
             continue
     print("Stopping camera...")
