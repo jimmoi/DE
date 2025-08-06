@@ -411,7 +411,7 @@ class YOLOv8HumanDetector(AIModel):
 # --- First Example Usage (for testing the module) ---
 if __name__ == "__main__":
     model = YOLOv8HumanDetector(
-        # tracker_config_path=STRONGSORT_DEFAULT_CFG, 
+        tracker_config_path=STRONGSORT_DEFAULT_CFG, 
         # tracker_config_path = BYTETRACK_DEFAULT_CFG,
     )
 
@@ -435,7 +435,7 @@ if __name__ == "__main__":
         frame_strongsort = frame.copy()
         for track in result:
             x1, y1, x2, y2 = track['box']
-            # track_id = track['track_id']
+            track_id = track['track_id']
             # Draw bounding box and track ID
             x1 = x1 * width
             y1 = y1 * height
@@ -443,7 +443,7 @@ if __name__ == "__main__":
             y2 = y2 * height
             x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
             cv2.rectangle(frame_strongsort, (x1, y1), (x2, y2), (0, 0, 255), 2)
-            # cv2.putText(frame_strongsort, f"ID: {track_id}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+            cv2.putText(frame_strongsort, f"ID: {track_id}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
         cv2.imshow("StrongSORT (Custom Config)", frame_strongsort)
         
         if cv2.waitKey(1) & 0xFF == ord('q'):
