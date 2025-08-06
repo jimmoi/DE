@@ -179,7 +179,8 @@ class VideoFileCamera(Camera):
             raise ValueError("Video file path cannot be empty for video file camera.")
         self.video_path = video_path
         self._cap = None # OpenCV VideoCapture object
-        self.fps = None # File pointer for the video file
+        self._fps = None # File pointer for the video file
+        self._frame_count = None
 
     def _open_camera(self):
         """Opens the video file."""
@@ -189,8 +190,10 @@ class VideoFileCamera(Camera):
             print(f"Error: Could not open video file {self.camera_id}: {self.video_path}")
             return None
         self._cap = cap
-        self.fps = cap.get(cv2.CAP_PROP_FPS)  # Get frames per second of the video
+        self._fps = cap.get(cv2.CAP_PROP_FPS)  # Get frames per second of the video
+        self._frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # Get total number of frames
         print(f"Camera {self.camera_id}: Video file opened.")
+        print("FPS:", self._fps, "Total Frames:", self._frame_count)
         return cap
 
     def _read_frame_internal(self, cap):
@@ -219,50 +222,72 @@ class VideoFileCamera(Camera):
         
         print(f"Camera {self.camera_id} successfully opened for acquisition.")
         while self._is_running:
+            ret, frame = self._read_frame_internal(cap)
             
-            if self._frame_buffer.full():
-                time.sleep(0.01)
-                continue  # Skip if buffer is full to avoid blocking
+            if ret:
+                # Put frame into buffer. blockingly if buffer is full
+                self._frame_buffer.put(frame)
+
             else:
-                ret, frame = self._read_frame_internal(cap)
+                # The video has ended. Stop the thread gracefully.
+                print(f"Info: Video file {self.camera_id} has finished. Stopping acquisition.")
+                self._is_running = False
                 
-                if ret:
-                    # Put frame into buffer.
-                    self._frame_buffer.put_nowait(frame)
-
-                    # Also update latest frame for direct access
-                    with self._frame_lock:
-                        self._latest_frame = frame
-                else:
-                    # The video has ended. Stop the thread gracefully.
-                    print(f"Info: Video file {self.camera_id} has finished. Stopping acquisition.")
-                    self._is_running = False
-                    break
-                
-
         # Ensure camera is released when stopping
         self._release_camera(cap)
         print(f"Camera {self.camera_id} acquisition thread terminated.")
         
+    def get_frame(self):
+        """
+        """
+        if not self._is_running:
+            print(f"Camera {self.camera_id} is not running. Cannot get frame.")
+            return None
+
+        try:
+            if not self._frame_buffer.empty():
+                # Get the latest frame from the buffer
+                return self._frame_buffer.get_nowait()
+            else:
+                return None
+        except queue.Empty:
+            print(f"Warning: No frames available in buffer for camera {self.camera_id}.")
+            return None
+        except Exception as e:
+            print(f"Error getting frame from {self.camera_id}: {e}")
+            return None
+        
     def get_fps(self):
         """Returns the frames per second of the video file."""
-        if self.fps is not None:
-            return self.fps
+        if self._fps is not None:
+            return self._fps
         else:
             print(f"Warning: FPS not available for camera {self.camera_id}.")
+            return None
+        
+    def get_frame_count(self):
+        """Returns the total number of frames in the video file."""
+        if self._frame_count is not None:
+            return self._frame_count
+        else:
+            print(f"Warning: Frame count not available for camera {self.camera_id}.")
             return None
 
 # --- Example Usage (for testing the module) ---
 if __name__ == "__main__":
     video_path = r"C:\Hemoglobin\project\DE\Vid_test\vdo_test_psdetec.mp4"  # Replace with your video file path
-    camera = VideoFileCamera(camera_id="test_video", video_path=video_path)
+    camera = VideoFileCamera(camera_id="Test_video_01", video_path=video_path)
     camera.start()
+    
     while camera.is_running:
         frame = camera.get_frame()
         if frame is not None:
+            start_time = time.perf_counter()
             cv2.imshow("Video Frame", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            if cv2.waitKey(5) & 0xFF == ord('q'):
                 break
+            end_time = time.perf_counter()
+            print(f"Frame displayed in {end_time - start_time:.3f} seconds.")
         else:
             continue
     print("Stopping camera...")
