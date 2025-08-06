@@ -283,7 +283,7 @@ if __name__ == "__main__":
         frame = camera.get_frame()
         if frame is not None:
             cv2.imshow("Video Frame", frame)
-            if cv2.waitKey(5) & 0xFF == ord('q'):
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         else:
             continue
