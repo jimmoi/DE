@@ -2,10 +2,9 @@ from util_module.camera_module import VideoFileCamera
 from util_module.ai_model_module import YOLOv8HumanDetector, STRONGSORT_DEFAULT_CFG
 from collect_log import log_detections_per_frame_wide
 
-
 import cv2
 import time
-
+from tqdm import tqdm
 
 def main():
     # video_path = r"C:\Users\kunka\Documents\GitHub\DE\test_vidio.mp4"
@@ -20,8 +19,13 @@ def main():
         tracker_config_path=STRONGSORT_DEFAULT_CFG
     )
 
+    cap = cv2.VideoCapture(video_path)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+
     camera.start()
     frame_counter = 0
+    progress_bar = tqdm(total=total_frames, desc="Processing Frames")
     
     while camera.is_running:
         temp_frame = camera.get_frame()
@@ -51,6 +55,7 @@ def main():
                 log_detections_per_frame_wide(detections, frame_id=frame_counter, fps=fps)
                 cv2.imshow("Tracking", frame)
                 frame_counter += 1
+                progress_bar.update(1)
             else:
                 print("Waiting for frame...")
                 time.sleep(0.1)
@@ -60,6 +65,7 @@ def main():
     finally:
         camera.stop()
         cv2.destroyAllWindows()
+        progress_bar.close()
 
 if __name__ == "__main__":
     main()
