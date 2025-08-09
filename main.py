@@ -8,14 +8,14 @@ from tqdm import tqdm
 
 def main():
     # video_path = r"C:\Users\kunka\Documents\GitHub\DE\test_vidio.mp4"
-    video_path = r"C:\Users\kunka\Documents\GitHub\DE\output_clip (1).mp4"
+    video_path = r"C:\Users\kunka\Documents\GitHub\DE\Vid_test\vdo_test_psdetec.mp4"
     camera = VideoFileCamera("VideoTest", video_path)
     
     model = YOLOv8HumanDetector(
-        model_name='yolov12.pt',
+        model_name='yolov8n.pt',
         device='auto',
-        confidence_threshold=0.01,
-        iou_threshold=0.01,
+        # confidence_threshold=0.5,
+        # iou_threshold=0.7,
         tracker_config_path=STRONGSORT_DEFAULT_CFG
     )
 
