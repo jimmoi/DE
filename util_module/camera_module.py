@@ -3,6 +3,7 @@ import threading
 import time
 from abc import ABC, abstractmethod
 import queue
+import os
 
 # --- Configuration Constants (Can be moved to a config file later) ---
 BUFFER_SIZE = 5 # Number of frames to buffer for smooth real-time processing
@@ -192,8 +193,8 @@ class VideoFileCamera(Camera):
     Handles local video files as camera sources.
     Reads the file once and then stops.
     """
-    def __init__(self, camera_id: str, video_path: str, scale_factor: float, preprocess: bool = True):
-        super().__init__(camera_id)
+    def __init__(self, video_path: str, scale_factor: float, camera_id: str = "", preprocess: bool = True):
+        super().__init__(os.path.basename(video_path).split(".")[0] if camera_id=="" else camera_id)
         if not video_path:
             raise ValueError("Video file path cannot be empty for video file camera.")
         self.video_path = video_path
