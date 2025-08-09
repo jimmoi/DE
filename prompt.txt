@@ -39,3 +39,50 @@ Then i farther can use to inference module, recording module, and process video 
 Let's move to AI model part. I want you to design me a abstract class of AI model. The main model type is a human detection and tracking. Farther, I can use to inference one input data or batch data, and can choose device to process model(cpu, gpu), can optimize model like half, last_channel, make to TensorRT, etc.
 And right now, I want a subclasses of yolov8 model human detection. What do you think, is it good idea?
  
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+        
+for creation requirements
+-I want user to create rectangle, create 4 points and random 1 color for that roi. By use will hold click. Start coordinate from mouse position on self._map_image is the first point
+-While holding mouse and drag cursor, coordinate from current mouse position is the last (fourth) point.
+And remain 2 two points will be second and third point. 
+And show text as "n" order point near each points position.
+And fill rectangle with color with 0.5 alpha value. 
+And show roi_name "area_n" (n is roi order) as name of roi in the center of that rectangle.
+And if user press "r" while holding action, it will cancel of that roi creation
+(while this holding mouse action user will cannot to quit with pressing "q".)
+-if user release mouse click. That roi will add to roi_data_temp.
+-if user click again mean they want to create second roi, then do the same step.
+-if user mouse cursor over the exist roi area, and press r. it will remove that roi.
+-if user press "s". it will save to json file.
+-I want to collect self._roi as dictionary following this structure:
+# name of roi and point order is auto increment
+{
+   area_1:
+   {
+   1 : 1st point,,
+   2 : 2nd point,
+   3 : 3rd point,
+   4 : 4th point,
+   },
+   area_2:
+   {
+   1 : 1st point,,
+   2 : 2nd point,
+   3 : 3rd point,
+   4 : 4th point,
+   }
+}
+
+
+for editing requirements
+-if user hold click their mouse cursor near over the exist point of any roi if they can move it position and release click to stop moving point
+-if user hold click their mouse cursor near over the the center of any roi if they can move that whole roi and release click to stop moving point
+-if user mouse cursor over the exist roi area, and press r. it will remove that roi.
+-if there are any the following action, data will be changed in roi_data_temp.
+-if user press "s". it will save to json file.
+
+if there are some weak logic in my design logic, you can change properly.
+
+

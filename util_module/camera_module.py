@@ -23,6 +23,8 @@ class Camera(ABC):
         self._thread = None
         self._latest_frame = None # To store the last read frame for direct access if buffer isn't needed
         self._frame_lock = threading.Lock() # Lock for accessing _latest_frame
+        self._fps = None # File pointer for the video file
+        self._res = None # Resolution of the video file or camera stream
 
     @abstractmethod
     def _open_camera(self):
@@ -44,9 +46,8 @@ class Camera(ABC):
         if self._is_running:
             print(f"Camera {self.camera_id} is already running.")
             return
-
-        self._is_running = True
         self._thread = threading.Thread(target=self._run_acquisition, daemon=True)
+        self._is_running = True
         self._thread.start()
         print(f"Camera {self.camera_id} acquisition started.")
 
@@ -129,6 +130,26 @@ class Camera(ABC):
     def is_running(self) -> bool:
         """Returns True if the camera acquisition thread is running."""
         return self._is_running
+    
+    @property
+    def fps(self):
+        """Returns the frames per second of the video file."""
+        if self._fps is not None:
+            return self._fps
+        else:
+            return None
+        
+    @property
+    def resolution(self):
+        """Returns the resolution of the video file or camera stream."""
+        if self._res is not None:
+            return self._res
+        else:
+            return None
+        
+    def check_cam_properties(self):
+        return (self.fps is not None) and \
+        (self.resolution is not None)
 
 class CCTVCamera(Camera):
     """
@@ -140,7 +161,6 @@ class CCTVCamera(Camera):
         if not rtsp_url and rtsp_url != 0:
             raise ValueError("RTSP URL cannot be empty for CCTV camera.")
         self.rtsp_url = rtsp_url
-        self._cap = None # OpenCV VideoCapture object
 
     def _open_camera(self):
         """
@@ -150,7 +170,6 @@ class CCTVCamera(Camera):
             print(f"Camera {self.camera_id}: Attempting to connect to RTSP stream ({attempt + 1}/{RECONNECT_ATTEMPTS})...")
             cap =  cv2.VideoCapture(int(self.rtsp_url)) if self.rtsp_url.isnumeric() else cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)# Use FFMPEG backend for RTSP
             if cap.isOpened():
-                self._cap = cap
                 print(f"Camera {self.camera_id}: Successfully connected to RTSP stream.")
                 return cap
             time.sleep(RECONNECT_DELAY_SEC)
@@ -173,15 +192,15 @@ class VideoFileCamera(Camera):
     Handles local video files as camera sources.
     Reads the file once and then stops.
     """
-    def __init__(self, camera_id: str, video_path: str):
+    def __init__(self, camera_id: str, video_path: str, scale_factor: float, preprocess: bool = True):
         super().__init__(camera_id)
         if not video_path:
             raise ValueError("Video file path cannot be empty for video file camera.")
         self.video_path = video_path
-        self._cap = None # OpenCV VideoCapture object
-        self._fps = None # File pointer for the video file
-        self._frame_count = None
-
+        self._frame_count = None # Total number of frames in the video file
+        self._is_preprocess = preprocess  # Whether to preprocess frames
+        self.scale_factor = scale_factor  # Default scale factor for resizing frames
+        
     def _open_camera(self):
         """Opens the video file."""
         print(f"Camera {self.camera_id}: Opening video file: {self.video_path}...")
@@ -189,11 +208,15 @@ class VideoFileCamera(Camera):
         if not cap.isOpened():
             print(f"Error: Could not open video file {self.camera_id}: {self.video_path}")
             return None
-        self._cap = cap
-        self._fps = cap.get(cv2.CAP_PROP_FPS)  # Get frames per second of the video
-        self._frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # Get total number of frames
+        fps = cap.get(cv2.CAP_PROP_FPS)  # Get frames per second of the video
+        width, height = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT)   
+        
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # Get total number of frames
         print(f"Camera {self.camera_id}: Video file opened.")
-        print("FPS:", self._fps, "Total Frames:", self._frame_count)
+        print("FPS:", fps, "Total Frames:", frame_count)
+        self._fps = fps
+        self._res = (width, height)
+        self._frame_count = frame_count
         return cap
 
     def _read_frame_internal(self, cap):
@@ -222,16 +245,24 @@ class VideoFileCamera(Camera):
         
         print(f"Camera {self.camera_id} successfully opened for acquisition.")
         while self._is_running:
-            ret, frame = self._read_frame_internal(cap)
-            
-            if ret:
-                # Put frame into buffer. blockingly if buffer is full
-                self._frame_buffer.put(frame)
+            try:
+                if self._frame_buffer.full():
+                        time.sleep(0.01)  # Wait a bit if buffer is full to avoid dropping frames
+                        continue
+                ret, frame = self._read_frame_internal(cap)
+                
+                if ret:
+                    # Put frame into buffer.
+                    # check item amount in buffer
+                    self._frame_buffer.put(frame)
 
-            else:
-                # The video has ended. Stop the thread gracefully.
-                print(f"Info: Video file {self.camera_id} has finished. Stopping acquisition.")
-                self._is_running = False
+                else:
+                    # The video has ended. Stop the thread gracefully.
+                    print(f"Info: Video file {self.camera_id} has finished. Stopping acquisition.")
+                    self._is_running = False
+            except Exception as e:
+                print(f"Error reading frame from {self.camera_id}: {e}")
+                self._is_running = False  # Stop if any error occurs
                 
         # Ensure camera is released when stopping
         self._release_camera(cap)
@@ -256,35 +287,65 @@ class VideoFileCamera(Camera):
         except Exception as e:
             print(f"Error getting frame from {self.camera_id}: {e}")
             return None
-        
-    def get_fps(self):
-        """Returns the frames per second of the video file."""
-        if self._fps is not None:
-            return self._fps
-        else:
-            print(f"Warning: FPS not available for camera {self.camera_id}.")
-            return None
-        
-    def get_frame_count(self):
+    
+    @staticmethod
+    def preprocess_frame(frame, scale_factor):
+        """
+        Preprocess the frame if needed (e.g., resizing).
+        """
+        if scale_factor != 1.0:
+            frame = cv2.resize(frame, None, fx=scale_factor, fy=scale_factor) 
+        frame = cv2.bilateralFilter(
+            frame, 
+            d=9, 
+            sigmaColor=50, 
+            sigmaSpace=50
+        )
+        return frame
+    
+    @property 
+    def frame_count(self):
         """Returns the total number of frames in the video file."""
         if self._frame_count is not None:
             return self._frame_count
         else:
-            print(f"Warning: Frame count not available for camera {self.camera_id}.")
             return None
+        
+    def check_cam_properties(self):
+        return (self.fps is not None) and \
+        (self.resolution is not None) and \
+        (self.frame_count is not None)
+        
+    def __repr__(self):
+        return self.camera_id
 
 # --- Example Usage (for testing the module) ---
 if __name__ == "__main__":
     video_path = r"C:\Hemoglobin\project\DE\Vid_test\vdo_test_psdetec.mp4"  # Replace with your video file path
-    camera = VideoFileCamera(camera_id="Test_video_01", video_path=video_path)
+    camera = VideoFileCamera(camera_id="Test_video_01", video_path=video_path, scale_factor=0.5)
     camera.start()
     
-    while camera.is_running:
-        frame = camera.get_frame()
-        if frame is not None:
-            cv2.imshow("Video Frame", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+
+    try:
+        while True:
+            time.sleep(1)  # Wait for camera to start and properties to be set
+            if camera.check_cam_properties():
+                print("="*50)
+                print(f"FPS: {camera.fps}, Resolution: {camera.resolution}, Frame Count: {camera.frame_count}")
                 break
-        else:
-            continue
-    print("Stopping camera...")
+        t = 0
+        while camera.is_running:
+            frame = camera.get_frame()
+            if frame is not None:
+                # frame = camera.preprocess_frame(frame, camera.scale_factor)
+                cv2.imshow("Video Frame", frame)
+                t += 1
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            else:
+                continue
+        print("Stopping camera...")
+        print(f"Total frames processed: {t}")
+    finally:
+        camera.stop()
+        cv2.destroyAllWindows()

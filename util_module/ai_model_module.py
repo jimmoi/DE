@@ -20,7 +20,7 @@ except ImportError:
 # --- Configuration Constants ---
 # Define a path where models will be stored or downloaded
 MODEL_DIR = "models"
-HUMAN_CLASS_ID_YOLO = 0 # YOLO models typically assign class_id 0 to 'person'
+
 
 class AIModel(ABC):
     """
@@ -213,7 +213,7 @@ def create_custom_tracker_config(base_config_path: str, params: dict) -> str:
     print(f"Custom tracker config saved to: {new_config_path}")
     return new_config_path
 
-
+HUMAN_CLASS_ID_YOLO = 0 # YOLO models typically assign class_id 0 to 'person'
 class YOLOv8HumanDetector(AIModel):
     """
     Concrete implementation of AIModel for YOLOv8 human detection.
@@ -411,21 +411,38 @@ class YOLOv8HumanDetector(AIModel):
 # --- First Example Usage (for testing the module) ---
 if __name__ == "__main__":
     model = YOLOv8HumanDetector(
+        model_name='yolo12x.pt',
+        iou_threshold=0.8,
+        confidence_threshold=0.01,
         tracker_config_path=STRONGSORT_DEFAULT_CFG, 
         # tracker_config_path = BYTETRACK_DEFAULT_CFG,
     )
 
     # Load an example image (replace with your own image path)
-    cap = cv2.VideoCapture(r"C:\Hemoglobin\project\DE\Vid_test\vdo_test_psdetec.mp4")
+    cap = cv2.VideoCapture(r"C:\Hemoglobin\project\DE\Vid_test\ิbook_fair.mp4")
+    # cap = cv2.VideoCapture(r"C:\Hemoglobin\project\DE\Vid_test\vdo_test_psdetec.mp4")
     ret, frame = cap.read()
     height, width,  = frame.shape[:2]
-    print(f"Frame dimensions: {width}x{height}")
     
+    scale_factor = 1.5
+    scaled_height, scaled_width, = int(height * scale_factor), int(width * scale_factor)
+
+
     while True:
         ret, frame = cap.read()
+        
         if not ret:
             print("End of stream or camera disconnected.")
             break
+        # Resize frame to match the model's expected input size
+        frame = cv2.resize(frame, (scaled_width, scaled_height))
+        
+        frame = cv2.bilateralFilter(
+                                frame, 
+                                d=9, 
+                                sigmaColor=75, 
+                                sigmaSpace=75
+                            )
         
         # Update with StrongSORT
         result = model.predict(frame.copy())
@@ -437,10 +454,10 @@ if __name__ == "__main__":
             x1, y1, x2, y2 = track['box']
             track_id = track['track_id']
             # Draw bounding box and track ID
-            x1 = x1 * width
-            y1 = y1 * height
-            x2 = x2 * width
-            y2 = y2 * height
+            x1 = x1 * scaled_width
+            y1 = y1 * scaled_height
+            x2 = x2 * scaled_width
+            y2 = y2 * scaled_height
             x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
             cv2.rectangle(frame_strongsort, (x1, y1), (x2, y2), (0, 0, 255), 2)
             cv2.putText(frame_strongsort, f"ID: {track_id}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
