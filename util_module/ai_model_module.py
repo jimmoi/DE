@@ -373,8 +373,10 @@ class YOLOv8HumanDetector(AIModel):
             # Each result object contains boxes, masks, keypoints, etc.
             # We are interested in result.boxes for detection.
             if result.boxes:
-                    if self.is_using_tracker and result.boxes.id is not None :
-                        for i, track_id in enumerate(result.boxes.id):
+                    if self.is_using_tracker:
+                        # if result.boxes.id is not None:
+                        for i in range(len(result.boxes)):
+                            track_id = result.boxes.id[i] if result.boxes.id is not None else -1
                             box = result.boxes[i]
                             x1, y1, x2, y2 = box.xyxyn[0].tolist()
                             conf = float(box.conf[0])
