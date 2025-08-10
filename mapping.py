@@ -52,8 +52,8 @@ if __name__ == "__main__":
             for cam_name in cam_dict:
                 cam_roi = cam_dict[cam_name]["roi"]
                 for cam_roi_name, cam_roi_data in cam_roi.items():
-                    
-                    if cam_roi_name == map_roi_name:
+
+                    if (cam_roi_name == map_roi_name) and (cam_roi_name.startswith("match")):
                         transform_matrix = find_perspective_transform(cam_roi_data, map_roi_data)
                         matrix_H[cam_roi_name] = transform_matrix
                         print(f"Transform matrix for {cam_roi_name}:")
