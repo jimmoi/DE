@@ -264,7 +264,7 @@ class Base_ROI(ABC):
         Allows the user to create new ROIs with mouse clicks.
         """
         print("--- Starting ROI Creation Mode ---")
-        print("Click and drag to create a rectangle. Press 'r' to remove a hovered ROI, 's' to save, 'q' to quit.")
+        print("Click and drag to create a rectangle. Press 'r' to remove a hovered ROI, 's' to save, 'q' to enter edit mode.")
         
         self._editing_mode = False
         self._roi_data_temp = self._roi.copy()
