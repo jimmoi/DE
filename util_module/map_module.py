@@ -472,7 +472,6 @@ class Camera_ROI(Base_ROI):
                 frame = self._camera.get_frame()
                 if frame is not None:
                     map_image = frame
-                    print(resolution)
                     self._camera.stop()
                     break
             self._camera.stop()
