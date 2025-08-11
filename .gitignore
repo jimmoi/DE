@@ -2,4 +2,4 @@
 # *test
 *.pt
 *.pyc
-
+detections_log.csv
