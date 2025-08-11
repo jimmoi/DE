@@ -69,15 +69,15 @@ if __name__ == "__main__":
     pre_process = False
     
     model = YOLOv8HumanDetector(
-        model_name="yolo12n.pt",
+        model_name="yolov8n.pt",
         device='auto',
         confidence_threshold=0.1,
         iou_threshold=0.5,
-        tracker_config_path=strongSORT
+        tracker_config_path=bytetrack
     )
 
     main(model,
-         video_path1,
+         video_path2,
          scale_factor,
          pre_process)
 
