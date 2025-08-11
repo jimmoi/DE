@@ -62,7 +62,7 @@ def main(model, video_path, scale_factor, pre_process):
 
 if __name__ == "__main__":
     video_path1 = r"Vid_test\vdo_test_psdetec.mp4"
-    video_path2 = r"Vid_test\front_room.mp4"
+    video_path2 = r"Vid_test\front_room_2.mp4"
     strongSORT = STRONGSORT_DEFAULT_CFG
     bytetrack = BYTETRACK_DEFAULT_CFG
     scale_factor = 1
