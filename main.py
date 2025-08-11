@@ -1,25 +1,13 @@
 from util_module.camera_module import VideoFileCamera
-from util_module.ai_model_module import YOLOv8HumanDetector, STRONGSORT_DEFAULT_CFG
+from util_module.ai_model_module import YOLOv8HumanDetector, STRONGSORT_DEFAULT_CFG, BYTETRACK_DEFAULT_CFG
 from collect_log import log_detections_per_frame_wide
 
 import cv2
 import time
 from tqdm import tqdm
 
-def main():
-    # video_path = r"C:\Users\kunka\Documents\GitHub\DE\test_vidio.mp4"
-    video_path = r"Vid_test\front_room.mp4"
-    camera = VideoFileCamera(video_path, 0.5, "test")
-    
-    model = YOLOv8HumanDetector(
-        model_name='yolov8n.pt',
-        device='auto',
-        confidence_threshold=0.01,
-        iou_threshold=0.7,
-        tracker_config_path=STRONGSORT_DEFAULT_CFG
-    )
-
-
+def main(model, video_path, scale_factor, pre_process):
+    camera = VideoFileCamera(video_path, scale_factor, "test")
     camera.start()
     
     total_frames = 0
@@ -30,7 +18,9 @@ def main():
             fps = camera.fps
             total_frames = camera.frame_count
             break
-    height, width = height*camera.scale_factor, width*camera.scale_factor
+        
+    if scale_factor != 1.0:
+        height, width = height*scale_factor, width*scale_factor
 
     frame_counter = 0
     progress_bar = tqdm(total=total_frames, desc="Processing Frames")
@@ -39,7 +29,8 @@ def main():
         while camera.is_running:
             frame = camera.get_frame()
             if frame is not None:
-                frame = camera.preprocess_frame(frame, camera.scale_factor)
+                if pre_process:
+                    frame = camera.preprocess_frame(frame, camera.scale_factor)
                 detections = model.predict(frame)
     
                 # draw_detections(frame, detections) 
@@ -70,5 +61,23 @@ def main():
         progress_bar.close()
 
 if __name__ == "__main__":
-    main()
+    video_path1 = r"Vid_test\vdo_test_psdetec.mp4"
+    video_path2 = r"Vid_test\front_room.mp4"
+    strongSORT = STRONGSORT_DEFAULT_CFG
+    bytetrack = BYTETRACK_DEFAULT_CFG
+    scale_factor = 1
+    pre_process = False
+    
+    model = YOLOv8HumanDetector(
+        model_name="yolo12n.pt",
+        device='auto',
+        confidence_threshold=0.1,
+        iou_threshold=0.5,
+        tracker_config_path=strongSORT
+    )
+
+    main(model,
+         video_path1,
+         scale_factor,
+         pre_process)
 
