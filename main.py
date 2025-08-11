@@ -6,23 +6,8 @@ import cv2
 import time
 from tqdm import tqdm
 
-def main():
-    video_path = r"Vid_test\vdo_test_psdetec.mp4"
-    # video_path = r"Vid_test\front_room.mp4"
-    scale_factor = 1  # Adjust the scale factor as needed
-    pre_process = False
+def main(model, video_path, scale_factor, pre_process):
     camera = VideoFileCamera(video_path, scale_factor, "test")
-    
-    model = YOLOv8HumanDetector(
-        model_name='yolov8n.pt',
-        device='auto',
-        confidence_threshold=0.5,
-        iou_threshold=0.8,
-        # tracker_config_path=STRONGSORT_DEFAULT_CFG,
-        tracker_config_path=BYTETRACK_DEFAULT_CFG
-    )
-
-
     camera.start()
     
     total_frames = 0
@@ -76,5 +61,23 @@ def main():
         progress_bar.close()
 
 if __name__ == "__main__":
-    main()
+    video_path1 = r"Vid_test\vdo_test_psdetec.mp4"
+    video_path2 = r"Vid_test\front_room.mp4"
+    strongSORT = STRONGSORT_DEFAULT_CFG
+    bytetrack = BYTETRACK_DEFAULT_CFG
+    scale_factor = 1
+    pre_process = False
+    
+    model = YOLOv8HumanDetector(
+        model_name="yolo12n.pt",
+        device='auto',
+        confidence_threshold=0.1,
+        iou_threshold=0.5,
+        tracker_config_path=strongSORT
+    )
+
+    main(model,
+         video_path1,
+         scale_factor,
+         pre_process)
 
