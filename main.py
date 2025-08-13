@@ -1,5 +1,5 @@
 from util_module.camera_module import VideoFileCamera
-from util_module.ai_model_module import YOLOv8HumanDetector, STRONGSORT_DEFAULT_CFG, BYTETRACK_DEFAULT_CFG
+from util_module.ai_model_module import YOLOv8HumanDetector, YoloSORT, BYTETRACK_DEFAULT_CFG
 from collect_log import log_detections_per_frame_wide
 
 import cv2
@@ -7,9 +7,10 @@ import time
 from tqdm import tqdm
 
 def main(model, video_path, scale_factor, pre_process):
+    print(pre_process)
     camera = VideoFileCamera(video_path, scale_factor, "test")
     camera.start()
-    
+
     total_frames = 0
     while camera.is_running:
         temp_frame = camera.get_frame()
@@ -18,13 +19,12 @@ def main(model, video_path, scale_factor, pre_process):
             fps = camera.fps
             total_frames = camera.frame_count
             break
-        
+
     if scale_factor != 1.0:
         height, width = height*scale_factor, width*scale_factor
 
     frame_counter = 0
     progress_bar = tqdm(total=total_frames, desc="Processing Frames")
-    
     try:
         while camera.is_running:
             frame = camera.get_frame()
@@ -49,9 +49,6 @@ def main(model, video_path, scale_factor, pre_process):
                 cv2.imshow("Tracking", frame)
                 frame_counter += 1
                 progress_bar.update(1)
-            else:
-                print("Waiting for frame...")
-                time.sleep(0.1)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -63,20 +60,26 @@ def main(model, video_path, scale_factor, pre_process):
 if __name__ == "__main__":
     video_path1 = r"Vid_test\vdo_test_psdetec.mp4"
     video_path2 = r"Vid_test\front_room.mp4"
-    strongSORT = STRONGSORT_DEFAULT_CFG
     bytetrack = BYTETRACK_DEFAULT_CFG
-    scale_factor = 1
-    pre_process = False
+    scale_factor = 0.5
+    pre_process = True
     
-    model = YOLOv8HumanDetector(
-        model_name="yolov8n.pt",
+    model_bytetrack = YOLOv8HumanDetector(
+        model_name="yolo12n.pt",
         device='auto',
-        confidence_threshold=0.1,
-        iou_threshold=0.5,
+        confidence_threshold=0.3,
+        iou_threshold=0.3,
         tracker_config_path=bytetrack
     )
+    
+    model_strongSORT = YoloSORT(
+        model_name='yolov8n.pt',
+        iou_threshold=0.1,
+        confidence_threshold=0.1,
+        device='auto',
+    )
 
-    main(model,
+    main(model_strongSORT,
          video_path2,
          scale_factor,
          pre_process)

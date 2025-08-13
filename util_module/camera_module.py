@@ -296,12 +296,12 @@ class VideoFileCamera(Camera):
         """
         if scale_factor != 1.0:
             frame = cv2.resize(frame, None, fx=scale_factor, fy=scale_factor) 
-        frame = cv2.bilateralFilter(
-            frame, 
-            d=9, 
-            sigmaColor=50, 
-            sigmaSpace=50
-        )
+        # frame = cv2.bilateralFilter(
+        #     frame, 
+        #     d=9, 
+        #     sigmaColor=50, 
+        #     sigmaSpace=50
+        # )
         return frame
     
     @property 
