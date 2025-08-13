@@ -1,11 +1,14 @@
+import os
+import sys
 import cv2
 import numpy as np
 from abc import ABC, abstractmethod
 import torch
 import yaml
-import os
 import time
 from typing import Union, List, Dict, Any, Optional
+from boxmot import StrongSort
+from pathlib import Path
 
 # Try to import ultralytics. If not available, provide a mock for demonstration.
 try:
@@ -51,11 +54,11 @@ class AIModel(ABC):
     def _resolve_device(self, device_pref: str) -> str:
         """Resolves the actual device to use based on preference and availability."""
         if device_pref == 'auto':
-            return 'cuda' if torch.cuda.is_available() else 'cpu'
+            return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         elif device_pref == 'cuda' and not torch.cuda.is_available():
             print("Warning: CUDA requested but not available. Falling back to CPU.")
-            return 'cpu'
-        return device_pref
+            return torch.device('cpu')
+        return torch.device(device_pref)
 
     @abstractmethod
     def _load_model(self):
@@ -409,19 +412,220 @@ class YOLOv8HumanDetector(AIModel):
                                     'class_name': class_name
                                 })   
         return detections
+    
+    
+class YoloSORT(AIModel):
+    """
+    Concrete implementation of AIModel for YOLOv8 human detection.
+    Uses ultralytics YOLO library.
+    """
+    def __init__(self, model_name: str = 'yolov8n.pt', device: str = 'auto',
+                 optimize: dict = None, confidence_threshold: float = 0.5, iou_threshold: float = 0.7, verbose: bool = False):
+        """
+        Args:
+            model_name (str): Name of the YOLOv8 model (e.g., 'yolov8n.pt', 'yolov8s.pt').
+                              Will be downloaded if not found locally.
+            device (str): Device to run inference on ('cpu', 'cuda', 'auto').
+            optimize (dict): Optimization settings.
+                             E.g., {'half': True, 'tensorrt': False}
+            confidence_threshold (float): Minimum confidence score for a detection to be kept.
+            iou_threshold (float): IoU threshold for Non-Maximum Suppression (NMS). Lower values
+                                   result in fewer overlapping boxes (more aggressive NMS).
+        """
+        super().__init__(model_path=model_name, device=device, optimize=optimize)
+        
+        # Ensure model directory exists
+        os.makedirs(MODEL_DIR, exist_ok=True)
+        model_path = os.path.join(MODEL_DIR, model_name)
+        super().__init__(model_path, device, optimize)
+        self.confidence_threshold = confidence_threshold
+        self.iou_threshold = iou_threshold # Store the IoU threshold
+        self.verbose = verbose # Verbose output for debugging
+        self.tracker = StrongSort(reid_weights=Path('mobilenetv2_x1_0_msmt17.pt'), device=torch.device("cuda:0") if self.device.type == 'cuda' else 'cpu', half=False)
+
+        if not _YOLO_AVAILABLE:
+            raise ImportError("ultralytics library is not installed. Cannot initialize YOLOv8HumanDetector.")
+
+    def _load_model(self):
+        """
+        Loads the YOLOv8 model using ultralytics and applies optimizations.
+        """
+        print(f"Loading YOLOv8 model from {self.model_path} on {self.device}...")
+        try:
+            self.model = YOLO(self.model_path)
+            
+            # Apply half precision if enabled and on CUDA
+            if self.optimize.get('half', False) and self.device == 'cuda':
+                print("Applying half precision (FP16).")
+                self.model.half() # Convert model to FP16
+            
+            # Export to TensorRT if enabled
+            if self.optimize.get('tensorrt', False) and self.device == 'cuda':
+                # Check if TensorRT engine already exists
+                engine_path = self.model_path.replace('.pt', '.engine')
+                if not os.path.exists(engine_path):
+                    print(f"Exporting YOLOv8 model to TensorRT engine: {engine_path}")
+                    # The export method handles the device automatically
+                    self.model.export(format='engine', device=self.device)
+                    self.model = YOLO(engine_path) # Load the exported engine
+                    print("TensorRT engine loaded.")
+                else:
+                    print(f"TensorRT engine already exists at {engine_path}. Loading it.")
+                    self.model = YOLO(engine_path)
+            
+            # Move model to the resolved device (ultralytics handles this well)
+            self.model.to(self.device)
+            print(f"YOLOv8 model loaded successfully on {self.device}.")
+
+        except Exception as e:
+            print(f"Error loading YOLOv8 model: {e}")
+            raise
+        
+    def predict(self, inputs: Union[np.ndarray, list[np.ndarray]]) -> Union[list, list[list]]:
+        """
+        Performs inference on one or more images.
+
+        Args:
+            inputs (Union[np.ndarray, list[np.ndarray]]): A single image (HWC, BGR)
+                                                          or a list of images for batch processing.
+
+        Returns:
+            Union[list, list[list]]: If single input, returns a list of detections.
+                                     If batch input, returns a list of lists of detections.
+        """
+        is_batch = isinstance(inputs, list)
+
+        if not is_batch:
+            inputs = [inputs] # Treat single image as a batch of one
+
+        processed_outputs = []
+        for img in inputs:
+            if img is None:
+                processed_outputs.append([]) # Append empty list for None input
+                continue
+
+            original_shape = img.shape[:2] # (H, W)
+            preprocessed_img = self._preprocess(img)
+            
+            # Move preprocessed image to the correct device
+            preprocessed_img = preprocessed_img
+
+            with torch.no_grad(): # Disable gradient calculation for inference
+                if self.optimize.get('half', False) and self.device == 'cuda':
+                    preprocessed_img = preprocessed_img.half() # Apply half precision if enabled
+                
+                model_output = self._inference(preprocessed_img)
+            
+            detections = self._postprocess(model_output, original_shape)
+            processed_outputs.append(detections)
+
+        return processed_outputs if is_batch else processed_outputs[0]
+
+    def _preprocess(self, image: np.ndarray) -> np.ndarray: # Changed return type to np.ndarray
+        """
+        YOLOv8's `predict` method handles internal preprocessing,
+        so this method can be a passthrough or minimal.
+        """
+        # ultralytics YOLO.predict expects a numpy array or list of arrays.
+        # It handles resizing, normalization, and channel ordering internally.
+        # So, we just return the original image.
+        return image
+
+    def _inference(self, preprocessed_input):
+        """
+        Runs inference using the YOLOv8 model.
+        """
+        # Pass the iou_threshold directly to the predict method
+        results = self.model.predict(
+            source=preprocessed_input,
+            conf=self.confidence_threshold,
+            iou=self.iou_threshold, # NMS IoU threshold added here
+            classes=[HUMAN_CLASS_ID_YOLO], # Filter for human class (0)
+            verbose=self.verbose, # Suppress verbose output
+            device=self.device # Ensure inference runs on the correct device
+        )
+
+        return {"result": results, "frame": preprocessed_input}
+
+    def _postprocess(self, model_output, original_shape: tuple) -> list:
+        """
+        Postprocesses YOLOv8 model output to a standardized detection format.
+        """
+        result_from_yolo = model_output["result"]
+        frame = model_output["frame"]
+        height, width = original_shape
+        
+        detections_tracking = []
+        detections = []
+        for result in result_from_yolo:
+            if result.boxes:
+               for box in result.boxes:
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    conf = float(box.conf[0])
+                    class_id = int(box.cls[0])
+                    if class_id == HUMAN_CLASS_ID_YOLO: # We only process human detections at this point
+                        detections_tracking.append([x1, y1, x2, y2, conf, class_id])
+        detections_tracking = np.array(detections_tracking)
+        
+        # Update tracker and draw results
+        #   INPUT:  M X (x, y, x, y, conf, cls)
+        #   OUTPUT: M X (x, y, x, y, id, conf, cls, ind)
+        result_with_tracking = self.tracker.update(detections_tracking, frame)
+
+        # normalize bounding box coordinates
+        if (result_with_tracking is not None) and (len(result_with_tracking) > 0):
+            result_with_tracking[:, :4] = result_with_tracking[:, :4] / np.array([width, height, width, height])
+            for i in range(len(result_with_tracking)):
+                track_id = result_with_tracking[i, 4] if result_with_tracking[i, 4] is not None else -1  # Track ID
+                box = result_with_tracking[i, :4]  # x1, y1, x2, y2
+                conf = result_with_tracking[i, 5]  # Confidence
+                class_id = result_with_tracking[i, 6]  # Class ID
+                class_name = self.model.names[class_id]
+
+                detections.append({
+                    'box': box.tolist(), # [x1, y1, x2, y2]
+                    'score': float(conf),
+                    'class_id': class_id,
+                    'class_name': class_name,
+                    'track_id': int(track_id)
+                })
+                
+        else:
+            for i in range(len(detections_tracking)):
+                detections_tracking[:, :4] = detections_tracking[:, :4] / np.array([width, height, width, height])
+                track_id = -1  # No tracking ID available
+                box = detections_tracking[i, :4]  # x1, y1, x2, y2
+                conf = detections_tracking[i, 4]  # Confidence
+                class_id = detections_tracking[i, 5]  # Class ID
+                class_name = self.model.names[class_id]
+
+                detections.append({
+                    'box': box.tolist(), # [x1, y1, x2, y2]
+                    'score': float(conf),
+                    'class_id': class_id,
+                    'class_name': class_name,
+                    'track_id': int(track_id)
+                })
+
+        return detections
 
 # --- First Example Usage (for testing the module) ---
 if __name__ == "__main__":
-    model = YOLOv8HumanDetector(
+    # model = YOLOv8HumanDetector(
+    #     model_name='yolo12x.pt',
+    #     iou_threshold=0.8,
+    #     confidence_threshold=0.01,
+    #     tracker_config_path=STRONGSORT_DEFAULT_CFG, 
+    #     # tracker_config_path = BYTETRACK_DEFAULT_CFG,
+    # )
+    model = YoloSORT(
         model_name='yolo12x.pt',
         iou_threshold=0.8,
-        confidence_threshold=0.01,
-        tracker_config_path=STRONGSORT_DEFAULT_CFG, 
-        # tracker_config_path = BYTETRACK_DEFAULT_CFG,
+        confidence_threshold=0.1,
     )
 
     # Load an example image (replace with your own image path)
-    cap = cv2.VideoCapture(r"C:\Hemoglobin\project\DE\Vid_test\ิbook_fair.mp4")
+    cap = cv2.VideoCapture(r"Vid_test\front_room.mp4")
     # cap = cv2.VideoCapture(r"C:\Hemoglobin\project\DE\Vid_test\vdo_test_psdetec.mp4")
     ret, frame = cap.read()
     height, width,  = frame.shape[:2]
